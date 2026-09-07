@@ -26,7 +26,7 @@ if (plugin.name !== 'tab-watchdog') throw new Error('verify: name inatteso')
 if (!Array.isArray(plugin.inject)) throw new Error('verify: inject mancante')
 if (typeof plugin.apply !== 'function') throw new Error('verify: apply mancante')
 
-const expected = ['remote']
+const expected = ['remote', 'sessions']
 if (JSON.stringify([...plugin.inject].sort()) !== JSON.stringify([...expected].sort())) {
   throw new Error(`verify: inject inatteso ${JSON.stringify(plugin.inject)}`)
 }

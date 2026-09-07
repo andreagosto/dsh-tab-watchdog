@@ -9,7 +9,7 @@ This is the "bundle" version (persistent, installable, shareable) of the **Tab W
 Two halves in a single npm package, like the official plugins:
 
 - **Host half** (`index.js`) — profile composition row (`cordis.patch.yml` + `dsh.bundle.patch`). It makes the package a Loader entry: that row is what pulls the browser half into the boot manifest. No business logic here.
-- **Browser half** (`lib/client.js`, served via `dsh.client` + the `./client` export) — a bundle in the `window.__ModuleLoader__.load({ id, factory })` format. It subscribes to the **Host events forwarded to the browser** and handles everything (state, watermark, blink). No UI is added to the harness.
+- **Browser half** (`lib/client.js`, served via `dsh.client` + the `./client` export) — a bundle in the `window.__ModuleLoader__.load({ id, factory })` format. It subscribes to the **Host events forwarded to the browser** (`ctx.remote.$on`) and handles everything (state, watermark, blink). No UI is added to the harness.
 
 ### Triggers (what makes it blink)
 
@@ -22,7 +22,7 @@ The browser only receives the events on the `dsh-api-remotes` allowlist. The wat
 | `user-questions/request(...)` (passive) | 🟡 yellow | "Asking for a response" |
 | `approval/request(...)` (passive) | 🟡 yellow | "Requires approval" |
 
-The `user-questions/request` and `approval/request` observers are **passive**: they always call `next()` so they never interfere with the official question/approval UI. If another handler consumes a request before the watchdog sees it, the yellow may not show; the green/error `emit` events are always delivered to **every** listener in parallel, so they are guaranteed.
+The `user-questions/request` and `approval/request` observers are **passive**: they always call `next()` so they never interfere with the official question/approval UI. The forwarded request does not carry `agent.id` in the browser, so the session is resolved the same way the official UI does it: `ctx.sessions.scopeOf(this)` on the scoped listener owner. Because listeners for these events are "waterfall" (single-consumer, ordered), the watchdog relies on registering before the official answerers — with only two service injects it usually activates first. If another handler claims a request before the watchdog, the yellow may not show; the green/error `emit` events are always delivered to **every** listener in parallel, so they are guaranteed.
 
 Note: `workflow/end`, `agent/status`, and `goal/changed` are **not** forwarded to the browser in this version's allowlist; observing them would require host-side aggregation over a custom channel (out of scope by design).
 
