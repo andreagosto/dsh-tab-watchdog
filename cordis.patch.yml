@@ -1,0 +1,8 @@
+# dsh-tab-watchdog — layer applicato quando il bundle è nel profilo.
+#
+# La riga monta la metà Host del plugin (packages risolto dal node_modules
+# del profilo) e, grazie alla dichiarazione `dsh.client` nel package.json,
+# fa sì che la metà Browser (lib/client.js) entri nel boot manifest web.
+- insert:
+    - id: tab-watchdog
+      name: dsh-tab-watchdog

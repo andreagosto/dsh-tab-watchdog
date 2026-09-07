@@ -1,0 +1,42 @@
+{
+  "name": "dsh-tab-watchdog",
+  "version": "0.1.0",
+  "description": "Tab Watchdog per DeepSeek Harness Web: quando un workspace finisce un giro (verde) o richiede attenzione (errore, domanda, approvazione) il titolo del tab lampeggia con un badge, e uno stato mostra i conteggi. Plugin persistente a due metà (host + browser).",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "tab-watchdog",
+    "cordis",
+    "attention"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "verify": "node scripts/verify.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "test": "node scripts/verify.mjs && node scripts/smoke.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  }
+}
