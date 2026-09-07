@@ -1,86 +1,86 @@
 # dsh-tab-watchdog
 
-Plugin persistente per **DeepSeek Harness Web**: quando uno dei tuoi workspace/sessioni finisce un giro di lavoro, va in errore, o richiede attenzione, il titolo del tab lampeggia con un badge `🟢`/`🟡`.
+A persistent plugin for **DeepSeek Harness Web**: when one of your workspaces/sessions finishes a work round, errors out, or needs attention, the tab title blinks a `🟢`/`🟡` badge.
 
-È la versione "bundle" (persistente, installabile, condivisibile) del plugin dinamico **Tab Watchdog** sviluppato in Creator mode (vedi `../conversazione-export.md`). A differenza del plugin dinamico **sopravvive a riavvio di `dsh` e a F5** del browser.
+This is the "bundle" version (persistent, installable, shareable) of the **Tab Watchdog** dynamic plugin originally developed in Creator mode. Unlike a dynamic plugin it **survives `dsh` restarts and browser reloads (F5)**.
 
-## Come funziona (architettura)
+## How it works (architecture)
 
-Due metà in un solo pacchetto npm, come i plugin ufficiali:
+Two halves in a single npm package, like the official plugins:
 
-- **Metà Host** (`index.js`) — riga di composizione del profilo (`cordis.patch.yml` + `dsh.bundle.patch`). Serve a rendere il pacchetto un entry del Loader: è grazie a questa riga che la metà Browser entra nel boot manifest. Qui non c'è logica di business.
-- **Metà Browser** (`lib/client.js`, servita via `dsh.client` + export `./client`) — un bundle nel formato `window.__ModuleLoader__.load({ id, factory })`. Si iscrive agli **eventi host inoltrati al browser** e gestisce tutto (stato, watermark, lampeggio). Nessuna UI aggiunta all'harness.
+- **Host half** (`index.js`) — profile composition row (`cordis.patch.yml` + `dsh.bundle.patch`). It makes the package a Loader entry: that row is what pulls the browser half into the boot manifest. No business logic here.
+- **Browser half** (`lib/client.js`, served via `dsh.client` + the `./client` export) — a bundle in the `window.__ModuleLoader__.load({ id, factory })` format. It subscribes to the **Host events forwarded to the browser** and handles everything (state, watermark, blink). No UI is added to the harness.
 
-### Trigger (cosa fa lampeggiare)
+### Triggers (what makes it blink)
 
-Il browser riceve solo gli eventi dell'allowlist di `dsh-api-remotes`. Il watchdog usa:
+The browser only receives the events on the `dsh-api-remotes` allowlist. The watchdog uses:
 
-| Evento | Livello | Etichetta |
+| Event | Level | Label |
 |---|---|---|
-| `api-session/status(sessionId, running=false)` | 🟢 verde | "Ha finito il giro di lavoro" |
-| `api-session/error(sessionId, message)` | 🟡 giallo | "Errore…" |
-| `user-questions/request(...)` (passivo) | 🟡 giallo | "Chiede una risposta" |
-| `approval/request(...)` (passivo) | 🟡 giallo | "Richiede approvazione" |
+| `api-session/status(sessionId, running=false)` | 🟢 green | "Finished a work round" |
+| `api-session/error(sessionId, message)` | 🟡 yellow | "Error…" |
+| `user-questions/request(...)` (passive) | 🟡 yellow | "Asking for a response" |
+| `approval/request(...)` (passive) | 🟡 yellow | "Requires approval" |
 
-Gli osservatori su `user-questions/request` e `approval/request` sono **passivi**: chiamano sempre `next()` per non interferire con la UI ufficiale delle domande/approvazioni. Se una richiesta viene consumata da un altro handler prima del watchdog, il giallo potrebbe non comparire; il verde/errore (eventi `emit`) sono invece sempre garantiti perché `ctx.remote.$on` li distribuisce a **tutti** i listener in parallelo.
+The `user-questions/request` and `approval/request` observers are **passive**: they always call `next()` so they never interfere with the official question/approval UI. If another handler consumes a request before the watchdog sees it, the yellow may not show; the green/error `emit` events are always delivered to **every** listener in parallel, so they are guaranteed.
 
-Nota: `workflow/end`, `agent/status` e `goal/changed` **non** vengono inoltrati al browser nell'allowlist di questa versione; per osservarli servirebbe l'aggregazione lato host con un canale custom (non incluso per scelta di semplicità).
+Note: `workflow/end`, `agent/status`, and `goal/changed` are **not** forwarded to the browser in this version's allowlist; observing them would require host-side aggregation over a custom channel (out of scope by design).
 
-### Modello a watermark
+### Watermark model
 
-- Gli eventi arrivano solo **con la pagina aperta** (anche su un'altra scheda del browser: è proprio lo scenario d'uso).
-- I nuovi eventi vengono considerati "pendenti" finché **torni** sulla pagina.
-- Mentre la pagina non è focalizzata e c'è almeno un pendente, il titolo alterna `🟢n 🟡m · <titolo>` e `<titolo>`.
-- Un evento che arriva **mentre sei focalizzato** viene segnato come letto subito (niente lampeggio residuo).
-- Quando una sessione **riparte** (`running=true`) le sue segnalazioni pendenti vengono rimosse.
-- Un errore su una sessione "congela" l'entry in giallo: il successivo `running=false` non la retrocede a verde.
+- Events only arrive **while the page is open** (even on another browser tab — that is exactly the intended use case).
+- New events stay "pending" until you **come back** to the page.
+- While the page is not focused and at least one item is pending, the title alternates between `🟢n 🟡m · <title>` and `<title>`.
+- An event that arrives **while you are focused** is marked read immediately (no leftover blinking).
+- When a session **restarts** (`running=true`), its pending entries are removed.
+- An error on a session "freezes" its entry in yellow: a later `running=false` does not downgrade it to green.
 
-## Installazione (profilo `web` locale)
+## Installation (local `web` profile)
 
-Dal checkout del plugin:
+From the plugin checkout:
 
 ```sh
-# dalla cartella che contiene dsh-tab-watchdog/
+# from the directory that contains dsh-tab-watchdog/
 npx @deepseek-ai/dsh@latest plugin --profile web add ./dsh-tab-watchdog
 ```
 
-Poi riavvia `dsh web`. La metà browser entra al successivo F5/avvio. La riga aggiunta è l'entry `tab-watchdog` nel `cordis.yml` del profilo.
+Then restart `dsh web`. The browser half activates on the next reload/startup. The added row is the `tab-watchdog` entry in the profile's `cordis.yml`.
 
-Rimozione:
+Removal:
 
 ```sh
 npx @deepseek-ai/dsh@latest plugin --profile web remove dsh-tab-watchdog
 ```
 
-> Il comando `dsh plugin` inoltra a pnpm nel profilo. Se pnpm non è installato (`corepack enable` o `npm i -g pnpm`).
+> `dsh plugin` forwards to pnpm inside the profile. If pnpm is not installed: `corepack enable` or `npm i -g pnpm`.
 
-## Sviluppo
+## Development
 
-Il sorgente della metà browser è `src/client.js` (fragment CJS che vive dentro la factory del loader). L'artefatto `lib/client.js` è **committato** (nessun build all'installazione da git).
-
-```sh
-npm run build   # rigenera lib/client.js da src/client.js
-npm test        # verify (struttura bundle) + smoke (logica lampeggio/watermark)
-```
-
-Nessun `prepare`/toolchain del monorepo: i plugin esterni non possono usare il preset `clientBundle` interno, quindi il formato del loader viene riprodotto a mano (`scripts/build.mjs`).
-
-## Condivisione con la community
-
-Il pacchetto dichiara `dsh.bundle.patch`, quindi si installa come bundle di profilo. Poiché `lib/client.js` e `index.js` sono artefatti committati, un'installazione **da git funziona senza `prepare`**:
+The browser half source is `src/client.js` (a CJS fragment living inside the loader factory). The `lib/client.js` artifact is **committed** (no build step at git-install time).
 
 ```sh
-npx @deepseek-ai/dsh@latest plugin --profile web add github:tuo-user/dsh-tab-watchdog
+npm run build   # regenerates lib/client.js from src/client.js
+npm test        # verify (bundle structure) + smoke (blink/watermark logic)
 ```
 
-Per la discoverability: crea un repo GitHub con il topic **`dsh-plugin`** (vedi README ufficiale deepseek-harness, sezione "Community and support"). In alternativa: `npm publish` e poi `dsh plugin --profile web add dsh-tab-watchdog`.
+No `prepare`/monorepo toolchain needed: out-of-tree plugins cannot use the internal `clientBundle` preset, so the loader format is reproduced by hand (`scripts/build.mjs`).
 
-## Note e limiti
+## Sharing with the community
 
-- Versione di riferimento testata: runtime `@deepseek-ai/dsh` **0.1.2-rc.1** (leggere l'avviso "breaking changes" dei prerelease rc).
-- La metà browser è scritta a mano contro le API osservate nei bundle installati; la struttura è validata da `npm test` ma va verificata dal vivo nel tuo profilo.
-- Nessun namespace di settings: il plugin non appare in Settings → Plugins. Per disattivarlo si usa `dsh plugin remove` (o `disabled: true` su una riga nel patch del profilo).
+The package declares `dsh.bundle.patch`, so it installs as a profile bundle. Because `lib/client.js` and `index.js` are committed artifacts, a **git install works without `prepare`**:
 
-## Licenza
+```sh
+npx @deepseek-ai/dsh@latest plugin --profile web add github:andreagosto/dsh-tab-watchdog
+```
+
+For discoverability, the GitHub repository carries the **`dsh-plugin`** topic (see the official deepseek-harness README, "Community and support"). Alternatively: `npm publish`, then `dsh plugin --profile web add dsh-tab-watchdog`.
+
+## Notes and limitations
+
+- Tested against runtime `@deepseek-ai/dsh` **0.1.2-rc.1** (mind the "breaking changes" notice on rc prereleases).
+- The browser half is hand-written against the APIs observed in the installed bundles; the structure is validated by `npm test`, but verify it live in your own profile.
+- No settings namespace: the plugin does not appear in Settings → Plugins. To disable it use `dsh plugin remove` (or set `disabled: true` on the row in the profile patch).
+
+## License
 
 MIT

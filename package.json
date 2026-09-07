@@ -1,7 +1,7 @@
 {
   "name": "dsh-tab-watchdog",
   "version": "0.1.0",
-  "description": "Tab Watchdog per DeepSeek Harness Web: quando un workspace finisce un giro (verde) o richiede attenzione (errore, domanda, approvazione) il titolo del tab lampeggia con un badge, e uno stato mostra i conteggi. Plugin persistente a due metà (host + browser).",
+  "description": "Tab Watchdog for DeepSeek Harness Web: when a workspace finishes a work round (green) or needs attention (error, question, approval) the tab title blinks with a badge. Persistent two-half plugin (host + browser).",
   "keywords": [
     "dsh",
     "dsh-plugin",
