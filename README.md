@@ -1,6 +1,6 @@
 # dsh-tab-watchdog
 
-Plugin persistente per **DeepSeek Harness Web**: quando uno dei tuoi workspace/sessioni finisce un giro di lavoro, va in errore, o richiede attenzione, il titolo del tab lampeggia con un badge `🟢`/`🟡` e nella testata di una sessione appare un piccolo stato con i conteggi e un pulsante ✓ per azzerare.
+Plugin persistente per **DeepSeek Harness Web**: quando uno dei tuoi workspace/sessioni finisce un giro di lavoro, va in errore, o richiede attenzione, il titolo del tab lampeggia con un badge `🟢`/`🟡`.
 
 È la versione "bundle" (persistente, installabile, condivisibile) del plugin dinamico **Tab Watchdog** sviluppato in Creator mode (vedi `../conversazione-export.md`). A differenza del plugin dinamico **sopravvive a riavvio di `dsh` e a F5** del browser.
 
@@ -9,7 +9,7 @@ Plugin persistente per **DeepSeek Harness Web**: quando uno dei tuoi workspace/s
 Due metà in un solo pacchetto npm, come i plugin ufficiali:
 
 - **Metà Host** (`index.js`) — riga di composizione del profilo (`cordis.patch.yml` + `dsh.bundle.patch`). Serve a rendere il pacchetto un entry del Loader: è grazie a questa riga che la metà Browser entra nel boot manifest. Qui non c'è logica di business.
-- **Metà Browser** (`lib/client.js`, servita via `dsh.client` + export `./client`) — un bundle nel formato `window.__ModuleLoader__.load({ id, factory })`. Si iscrive agli **eventi host inoltrati al browser** e gestisce tutto (stato, watermark, lampeggio, chip).
+- **Metà Browser** (`lib/client.js`, servita via `dsh.client` + export `./client`) — un bundle nel formato `window.__ModuleLoader__.load({ id, factory })`. Si iscrive agli **eventi host inoltrati al browser** e gestisce tutto (stato, watermark, lampeggio). Nessuna UI aggiunta all'harness.
 
 ### Trigger (cosa fa lampeggiare)
 
@@ -29,7 +29,7 @@ Nota: `workflow/end`, `agent/status` e `goal/changed` **non** vengono inoltrati 
 ### Modello a watermark
 
 - Gli eventi arrivano solo **con la pagina aperta** (anche su un'altra scheda del browser: è proprio lo scenario d'uso).
-- I nuovi eventi vengono considerati "pendenti" finché **torni** sulla pagina (o premi ✓).
+- I nuovi eventi vengono considerati "pendenti" finché **torni** sulla pagina.
 - Mentre la pagina non è focalizzata e c'è almeno un pendente, il titolo alterna `🟢n 🟡m · <titolo>` e `<titolo>`.
 - Un evento che arriva **mentre sei focalizzato** viene segnato come letto subito (niente lampeggio residuo).
 - Quando una sessione **riparte** (`running=true`) le sue segnalazioni pendenti vengono rimosse.

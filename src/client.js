@@ -1,7 +1,5 @@
-const React = require('react')
-
 const name = 'tab-watchdog'
-const inject = ['remote', 'slots']
+const inject = ['remote']
 
 const MAX = 24
 
@@ -100,13 +98,6 @@ function prefixOf(list) {
   return parts.length > 0 ? parts.join(' ') + SEP : ''
 }
 
-function summaryOf(list) {
-  return list.slice(0, 4).map((item) => {
-    const tail = item.sessionId ? ' (' + String(item.sessionId).slice(0, 8) + ')' : ''
-    return item.label + tail
-  }).join(' | ')
-}
-
 function stopBlink() {
   if (!blinking) return
   blinking = false
@@ -137,47 +128,6 @@ function evaluate() {
   } else {
     stopBlink()
   }
-}
-
-function ackAll() {
-  seenSeq = head
-  stopBlink()
-}
-
-function WatchdogChip() {
-  const [, force] = React.useState(0)
-  React.useEffect(() => {
-    const timer = window.setInterval(() => force((count) => count + 1), 1000)
-    return () => window.clearInterval(timer)
-  }, [])
-  const items = pendingItems()
-  const counts = countsOf(items)
-  const hint = (counts.green + counts.yellow) > 0 ? '\u25CF ' + summaryOf(items) : 'watchdog attivo'
-  const rowStyle = { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, lineHeight: 1 }
-  const chipStyle = {
-    display: 'inline-flex', alignItems: 'center', gap: 4,
-    padding: '2px 6px', borderRadius: 8,
-    border: '1px solid var(--dsw-alias-border-l2)',
-    color: 'var(--dsw-alias-label-secondary)',
-    background: 'var(--dsw-alias-bg-base)',
-  }
-  const btnStyle = {
-    display: 'inline-flex', alignItems: 'center', gap: 3,
-    padding: '2px 7px', borderRadius: 8,
-    border: '1px solid var(--dsw-alias-border-l2)',
-    background: 'var(--dsw-alias-bg-float)',
-    color: 'var(--dsw-alias-label-primary)',
-    cursor: 'pointer', fontSize: 12, lineHeight: 1.3,
-  }
-  return React.createElement('div', { style: rowStyle, title: hint },
-    React.createElement('span', { style: chipStyle },
-      React.createElement('span', null, GREEN + counts.green),
-      React.createElement('span', null, YELLOW + counts.yellow)),
-    React.createElement('button', {
-      type: 'button', style: btnStyle,
-      onClick: () => { ackAll() },
-      title: 'Azzera le segnalazioni pendenti',
-    }, '\u2713'))
 }
 
 function apply(ctx) {
@@ -230,16 +180,6 @@ function apply(ctx) {
       }
     }, 'tab-watchdog: visibility')
   }
-
-  try {
-    if (ctx.slots) {
-      ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
-        name: 'conversation.session.header.utilities',
-        id: name,
-        order: 50,
-      }, WatchdogChip))
-    }
-  } catch (error) {}
 }
 
 module.exports = { name, inject, apply }
