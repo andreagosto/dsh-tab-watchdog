@@ -19,12 +19,12 @@ The browser only receives the events on the `dsh-api-remotes` allowlist. The wat
 |---|---|---|
 | `api-session/status(sessionId, running=false)` | 🟢 green | "Finished a work round" |
 | `api-session/error(sessionId, message)` | 🟡 yellow | "Error…" |
-| `user-questions/request(...)` (passive) | 🟡 yellow | "Asking for a response" |
-| `approval/request(...)` (passive) | 🟡 yellow | "Requires approval" |
+| pending `approval` interaction | 🟡 yellow | "Requires approval" |
+| pending `question` / `plan-review` interaction | 🟡 yellow | "Asking for a response" |
 
-The `user-questions/request` and `approval/request` observers are **passive**: they always call `next()` so they never interfere with the official question/approval UI. The forwarded request does not carry `agent.id` in the browser, so the session is resolved the same way the official UI does it: `ctx.sessions.scopeOf(this)` on the scoped listener owner. Because listeners for these events are "waterfall" (single-consumer, ordered), the watchdog relies on registering before the official answerers — with only two service injects it usually activates first. If another handler claims a request before the watchdog, the yellow may not show; the green/error `emit` events are always delivered to **every** listener in parallel, so they are guaranteed.
+Green/errors use the forwarded `emit` events (`ctx.remote.$on`). Yellow for questions and approvals does **not** rely on the `user-questions/request`/`approval/request` waterfall events: those are single-consumer and claimed in registration order by the official UI answerers, and the forwarded request does not carry a stable session id. Instead the watchdog polls the state the official UI publishes while it waits on you: `ctx.uiSession.pendingInteractions.getSnapshot()` — a `Map<sessionId, interaction>` with `kind` ∈ `approval` | `question` | `plan-review`. The poll runs in the existing 1s tick; entries are re-bumped while pending and removed when the interaction clears, so an answer stops the blink by itself. This covers **every** session in the app, not just the one in view.
 
-Note: `workflow/end`, `agent/status`, and `goal/changed` are **not** forwarded to the browser in this version's allowlist; observing them would require host-side aggregation over a custom channel (out of scope by design).
+Note: `workflow/end`, `agent/status`, and `goal/changed` are **not** forwarded to the browser in this version's allowlist; observing them would require host-side aggregation over a custom channel (out of scope by design). The yellow path depends on the app's own pending-interaction UI (`ui-approval`/`ui-user-questions`) publishing its wait state; if a third-party answerer claims a request without going through that UI, that interaction cannot be seen from the browser.
 
 ### Watermark model
 

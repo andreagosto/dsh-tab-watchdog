@@ -7,7 +7,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const source = await readFile(join(root, 'lib', 'client.js'), 'utf8')
 
 const state = { focused: true, title: 'DeepSeek Web' }
-const owners = new Map()
+const pendingMap = new Map()
 const listeners = {}
 
 let registration
@@ -36,19 +36,24 @@ vm.createContext(sandbox)
 vm.runInContext(source, sandbox)
 if (!registration) throw new Error('smoke: nessuna registrazione __ModuleLoader__')
 
-const sessionOf = (owner) => { const id = owners.get(owner); return id ? 'session-' + id : undefined }
-
-let effectCleanups = []
-let handlers = {}
-const ctxStub = {
-  slots: undefined,
-  sessions: { scopeOf: sessionOf },
-  remote: {
-    $on: (event, handler) => {
-      handlers[event] = handler
-      return () => { delete handlers[event] }
-    },
+const uiSessionStub = {
+  pendingInteractions: {
+    getSnapshot: () => pendingMap,
+    subscribe: () => () => {},
   },
+}
+const remoteStub = {
+  $on: (event, handler) => {
+    handlers[event] = handler
+    return () => { delete handlers[event] }
+  },
+}
+let handlers = {}
+let effectCleanups = []
+const ctxStub = {
+  uiSession: uiSessionStub,
+  remote: remoteStub,
+  get: (name) => (name === 'uiSession' ? uiSessionStub : undefined),
   effect: (fn) => { effectCleanups.push(fn()) },
 }
 
@@ -60,10 +65,6 @@ const assert = (cond, msg) => {
 }
 
 const plugin = registration.factory(() => ({}))
-const run = (name, ...args) => handlers[name](...args)
-const runScoped = (name, owner, ...args) => handlers[name].call(owner, ...args)
-const fire = (type) => { for (const fn of listeners[type] ?? []) fn() }
-const fireWindow = (type) => { for (const fn of listeners['w:' + type] ?? []) fn() }
 const hasBadge = (title) => title.includes('\uD83D\uDFE2') || title.includes('\uD83D\uDFE1')
 const blinkOn = () => {
   for (let i = 0; i < 4; i += 1) {
@@ -72,6 +73,14 @@ const blinkOn = () => {
   }
   return hasBadge(state.title)
 }
+const tick = () => { if (sandbox.window.tick) sandbox.window.tick() }
+const hide = () => { state.focused = false }
+const show = () => {
+  state.focused = true
+  for (const fn of listeners['visibilitychange'] ?? []) fn()
+  for (const fn of listeners['w:focus'] ?? []) fn()
+}
+const run = (name, ...args) => handlers[name](...args)
 
 plugin.apply(ctxStub)
 
@@ -79,56 +88,43 @@ const baseTitle = 'DeepSeek Web'
 assert(state.title === baseTitle, 'titolo iniziale invariato')
 assert(typeof handlers['api-session/status'] === 'function', 'osserva api-session/status')
 assert(typeof handlers['api-session/error'] === 'function', 'osserva api-session/error')
-assert(typeof handlers['user-questions/request'] === 'function', 'osserva user-questions/request')
-assert(typeof handlers['approval/request'] === 'function', 'osserva approval/request')
+assert(handlers['user-questions/request'] === undefined, 'non osserva piu i waterfall user-questions/approval')
+assert(handlers['approval/request'] === undefined, 'niente listener waterfall approval')
 
-let nextCalls = 0
-const ownerAsk = { id: 'agent-1' }
-owners.set(ownerAsk, 'agent-1')
-runScoped('user-questions/request', ownerAsk, { questions: [] }, () => { nextCalls += 1 })
-assert(nextCalls === 1, 'observer user-questions passivo chiama next() senza consumare')
-state.focused = false
-if (sandbox.window.tick) sandbox.window.tick()
-assert(hasBadge(state.title), 'domanda (scoped via sessions.scopeOf) genera un pendente da nascosto')
-state.focused = true
-state.title = baseTitle
-owners.clear()
-nextCalls = 0
-const ownerScopeless = { id: 'orphan' }
-runScoped('user-questions/request', ownerScopeless, { questions: [] }, () => { nextCalls += 1 })
-assert(nextCalls === 1, 'senza sessione risolvibile resta passivo (nessun pendente)')
-assert(state.title === baseTitle, 'senza sessione non si creano pendenti')
-state.title = baseTitle
-owners.clear()
-
-state.focused = false
+// verde: sessione che finisce da nascosto
+hide()
 run('api-session/status', 'session-1', false)
-assert(blinkOn(), 'sessione finita mentre nascosto avvia il lampeggio (badge nel titolo)')
+assert(blinkOn() && state.title.includes('\uD83D\uDFE2'), 'sessione finita da nascosto lampeggia verde')
+show()
+assert(state.title === baseTitle, 'ritorno al focus ripristina il titolo')
 
-run('api-session/error', 'session-1', 'boom')
-assert(blinkOn(), 'errore sulla sessione lascia pendente il lampeggio')
+// giallo: interazione pendente pubblicata dalla UI (approval)
+hide()
+pendingMap.set('session-1', { kind: 'approval', toolName: 'bash', sessionId: 'session-1' })
+tick()
+assert(blinkOn() && state.title.includes('\uD83D\uDFE1'), 'approval pendente da nascosto lampeggia giallo')
+assert(blinkOn(), 'il lampeggio continua finche l interazione resta pendente')
 
-state.focused = true
-fireWindow('focus')
-assert(state.title === baseTitle, 'ritorno al focus ripristina il titolo originale')
-assert(!blinkOn(), 'niente badge dopo il ritorno al focus')
+// risposta: la UI rimuove il pendente -> si ferma
+pendingMap.clear()
+tick()
+assert(state.title === baseTitle, 'interazione risolta: lampeggio si ferma e titolo torna base')
 
-run('api-session/status', 'session-1', false)
-assert(state.title === baseTitle, 'evento mentre focalizzato non lascia pendenti')
+// giallo: domanda (kind question) su un altra sessione
+pendingMap.set('session-2', { kind: 'question', sessionId: 'session-2' })
+tick()
+assert(blinkOn() && state.title.includes('\uD83D\uDFE1'), 'domanda pendente da nascosto lampeggia giallo')
+pendingMap.clear()
+tick()
+assert(state.title === baseTitle, 'domanda risolta: si ferma')
+show()
 
-state.focused = false
-if (sandbox.window.tick) sandbox.window.tick()
-run('api-session/error', 'session-2', 'altro guasto')
-assert(blinkOn(), 'nuovo errore mentre nascosto riavvia il lampeggio')
-
-state.focused = true
-fire('visibilitychange')
-assert(state.title === baseTitle, 'secondo ritorno ripristina di nuovo il titolo')
-
-run('api-session/status', 'session-3', true)
-state.focused = false
-if (sandbox.window.tick) sandbox.window.tick()
-assert(!blinkOn(), 'sessione che riparte (running=true) non lascia segnalazioni')
+// errore ancora funzionante
+hide()
+run('api-session/error', 'session-3', 'boom')
+assert(blinkOn() && state.title.includes('\uD83D\uDFE1'), 'errore da nascosto lampeggia giallo')
+show()
+assert(state.title === baseTitle, 'focus dopo errore ripristina il titolo')
 
 for (const cleanup of effectCleanups) cleanup()
 console.log(`\n[smoke] OK — ${passed} asserzioni superate`)
