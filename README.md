@@ -1,6 +1,6 @@
 # dsh-tab-watchdog
 
-A persistent plugin for **DeepSeek Harness Web**: when one of your workspaces/sessions finishes a work round, errors out, or needs attention, the tab title blinks a `🟢`/`🟡` badge.
+A persistent plugin for **DeepSeek Harness Web**: when one of your workspaces/sessions finishes a work round, errors out, or needs your input, the browser tab signals it — a little **whale** (the DeepSeek Harness logo) blinks **green** or **yellow** in the favicon, and the tab title shows the overall pending counter.
 
 This is the "bundle" version (persistent, installable, shareable) of the **Tab Watchdog** dynamic plugin originally developed in Creator mode. Unlike a dynamic plugin it **survives `dsh` restarts and browser reloads (F5)**.
 
@@ -17,20 +17,22 @@ The browser only receives the events on the `dsh-api-remotes` allowlist. The wat
 
 | Event | Level | Label |
 |---|---|---|
-| `api-session/status(sessionId, running=false)` | 🟢 green | "Finished a work round" |
-| `api-session/error(sessionId, message)` | 🟡 yellow | "Error…" |
-| pending `approval` interaction | 🟡 yellow | "Requires approval" |
-| pending `question` / `plan-review` interaction | 🟡 yellow | "Asking for a response" |
+| `api-session/status(sessionId, running=false)` | 🟢 green whale | "Finished a work round" |
+| `api-session/error(sessionId, message)` | 🟡 yellow whale | "Error…" |
+| pending `approval` interaction | 🟡 yellow whale | "Requires approval" |
+| pending `question` / `plan-review` interaction | 🟡 yellow whale | "Asking for a response" |
 
 Green/errors use the forwarded `emit` events (`ctx.remote.$on`). Yellow for questions and approvals does **not** rely on the `user-questions/request`/`approval/request` waterfall events: those are single-consumer and claimed in registration order by the official UI answerers, and the forwarded request does not carry a stable session id. Instead the watchdog polls the state the official UI publishes while it waits on you: `ctx.uiSession.pendingInteractions.getSnapshot()` — a `Map<sessionId, interaction>` with `kind` ∈ `approval` | `question` | `plan-review`. The poll runs in the existing 1s tick; entries are re-bumped while pending and removed when the interaction clears, so an answer stops the blink by itself. This covers **every** session in the app, not just the one in view.
 
 Note: `workflow/end`, `agent/status`, and `goal/changed` are **not** forwarded to the browser in this version's allowlist; observing them would require host-side aggregation over a custom channel (out of scope by design). The yellow path depends on the app's own pending-interaction UI (`ui-approval`/`ui-user-questions`) publishing its wait state; if a third-party answerer claims a request without going through that UI, that interaction cannot be seen from the browser.
 
-### Watermark model
+### Blink model (watermark)
 
 - Events only arrive **while the page is open** (even on another browser tab — that is exactly the intended use case).
 - New events stay "pending" until you **come back** to the page.
-- While the page is not focused and at least one item is pending, the title alternates between `🟢n 🟡m · <title>` and `<title>`.
+- While the page is not focused and at least one item is pending, the **favicon whale** blinks (alternating with the original favicon) and the title alternates between `N · <title>` and `<title>`, where `N` is the **overall** pending count across sessions and levels.
+- Whale color: **green** when only finished rounds are pending, **yellow** when there is any error/question/approval, and it **alternates green↔yellow** when both kinds are pending at once.
+- The original favicon is captured on load and always restored when you come back (or when pending clears) — nothing is permanently altered.
 - An event that arrives **while you are focused** is marked read immediately (no leftover blinking).
 - When a session **restarts** (`running=true`), its pending entries are removed.
 - An error on a session "freezes" its entry in yellow: a later `running=false` does not downgrade it to green.
